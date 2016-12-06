@@ -19,7 +19,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <vector> // STL dynamic memory.
-
+#include <SOIL.h>
 
 
 /*----------------------------------------------------------------------------
@@ -27,8 +27,9 @@
   ----------------------------------------------------------------------------*/
 // this mesh is a dae file format but you should be able to use any other format too, obj is typically what is used
 // put the mesh in your project directory, or provide a filepath for it here
-#define STADIUM_NAME "../neweststadium.obj"
-#define PLAYER_NAME "../luiginoarm.obj"
+#define TEST_CUBE "../textcube.obj"
+#define STADIUM_NAME "../newstadium.obj"
+#define PLAYER_NAME "../football.obj"
 #define BALL_NAME "../footballsmall.obj"
 #define ENEMY_NAME "../patrick.obj"
 #define PLAYER_ARM "../luigiarmonaxis.obj"
@@ -39,11 +40,15 @@
 
 
 //change if more meshes loaded
-int numberOfMeshes = 5;
+int numberOfMeshes = 1;
 
-int g_point_count[5];
-std::vector<float> g_vp[5], g_vn[5], g_vt[5];
-unsigned int vaos[5];
+int g_point_count[1];
+std::vector<float> g_vp[1], g_vn[1], g_vt[1];
+unsigned int vaos[1];
+
+
+int twidth, theight;
+GLuint texture;
 
 // Macro for indexing vertex buffer
 #define BUFFER_OFFSET(i) ((char *)NULL + (i))
@@ -123,6 +128,10 @@ class Enemy {
 			if (zposition < 0) {
 				zposition += 0.01;
 			}
+		}
+
+		void boxCollision() {
+
 		}
 };
 
@@ -356,15 +365,17 @@ void generateObjectBufferMesh() {
 
 	//Note: you may get an error "vector subscript out of range" if you are using this code for a mesh that doesnt have positions and normals
 	//Might be an idea to do a check for that before generating and binding the buffer.
-	const char* names[5];
-	names[0] = STADIUM_NAME;
-	names[1] = PLAYER_NAME;
-	names[2] = BALL_NAME;
-	names[3] = ENEMY_NAME;
-	names[4] = PLAYER_ARM;
+	const char* names[1];
+	names[0] = TEST_CUBE;
+	//names[0] = STADIUM_NAME;
+	//names[1] = PLAYER_NAME;
+	//names[2] = BALL_NAME;
+	//names[3] = ENEMY_NAME;
+	//names[4] = PLAYER_ARM;
 	load_mesh(names);
 
 	for (int i = 0; i < numberOfMeshes; i++) {
+
 		unsigned int vp_vbo = 0;
 
 		loc1 = glGetAttribLocation(shaderProgramID, "vertex_position");
@@ -379,11 +390,11 @@ void generateObjectBufferMesh() {
 		glBindBuffer(GL_ARRAY_BUFFER, vn_vbo);
 		glBufferData(GL_ARRAY_BUFFER, g_point_count[i] * 3 * sizeof(float), &g_vn[i][0], GL_STATIC_DRAW);
 
-		//	This is for texture coordinates which you don't currently need, so I have commented it out
-		//	unsigned int vt_vbo = 0;
-		//	glGenBuffers (1, &vt_vbo);
-		//	glBindBuffer (GL_ARRAY_BUFFER, vt_vbo);
-		//	glBufferData (GL_ARRAY_BUFFER, g_point_count * 2 * sizeof (float), &g_vt[0], GL_STATIC_DRAW);
+		//This is for texture coordinates which you don't currently need, so I have commented it out
+		unsigned int vt_vbo = 0;
+		glGenBuffers (1, &vt_vbo);
+		glBindBuffer (GL_ARRAY_BUFFER, vt_vbo);
+		glBufferData (GL_ARRAY_BUFFER, g_point_count[i] * 2 * sizeof (float), &g_vt[i][0], GL_STATIC_DRAW);
 
 		glGenVertexArrays(1, &vaos[i]);
 		glBindVertexArray(vaos[i]);
@@ -394,6 +405,9 @@ void generateObjectBufferMesh() {
 		glEnableVertexAttribArray(loc2);
 		glBindBuffer(GL_ARRAY_BUFFER, vn_vbo);
 		glVertexAttribPointer(loc2, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+		glEnableVertexAttribArray(loc3);
+		glBindBuffer (GL_ARRAY_BUFFER, vt_vbo);
+		glVertexAttribPointer (loc3, 2, GL_FLOAT, GL_FALSE, 0, NULL);
 
 		glBindVertexArray(0);
 	}
@@ -424,9 +438,32 @@ void display(){
 		calculateCameraPosition();
 	}
 	//third person on thrown ball
-	if (throwBall = throwBall) {
-		cameraPos = glm::vec3(xBall, yBall, (zBall+1));
-	}
+	//if (throwBall) {
+	//	cameraPos = glm::vec3(xBall, yBall, (zBall+1));
+	//}
+
+
+	//test cube
+
+	mat4 view = identity_mat4();
+	mat4 persp_proj = perspective(45.0, (float)width / (float)height, 0.1, 100.0);
+	mat4 model = identity_mat4();
+	model = rotate_y_deg(model, rotate_y);
+	view = translate(view, vec3(0.0, 0.0, -5.0f));
+
+	// update uniforms & draw
+	glUniformMatrix4fv(proj_mat_location, 1, GL_FALSE, persp_proj.m);
+	glUniformMatrix4fv(view_mat_location, 1, GL_FALSE, view.m);
+	glUniformMatrix4fv(matrix_location, 1, GL_FALSE, model.m);
+
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glUniform1i(glGetUniformLocation(shaderProgramID, "theTexture"), 0);
+
+	glBindVertexArray(vaos[0]);
+	glDrawArrays(GL_TRIANGLES, 0, g_point_count[0]);
+	
+
+	/*
 	// Root of the Hierarchy (stadium)
 	glm::mat4 view = glm::translate(glm::mat4(1.0), glm::vec3(0.0, 0.0, -40.0));
 	mat4 persp_proj = perspective(45.0, (float)width/(float)height, 0.1, 100.0);
@@ -439,10 +476,12 @@ void display(){
 	glUniformMatrix4fv (view_mat_location, 1, GL_FALSE, glm::value_ptr(view));
 	glUniformMatrix4fv (matrix_location, 1, GL_FALSE, model.m);
 
-	// draw mesh 1 (player)
 	glBindVertexArray(vaos[0]);
 	glDrawArrays (GL_TRIANGLES, 0, g_point_count[0]);
 
+	
+
+	// draw mesh 1 (player)
 	mat4 model2 = identity_mat4();
 	model2 = translate(model2, vec3(xplayer, -0.09f, zplayer));
 	mat4 globalmodel = model * model2;
@@ -497,13 +536,14 @@ void display(){
 		glDrawArrays(GL_TRIANGLES, 0, g_point_count[4]);
 	}
 	//make timer, end of timer release ball, during timer move arm up then back down using throwing boolean function
-
+	*/
 
     glutSwapBuffers();
 }
 
 
 void updateScene() {	
+
 
 	// Placeholder code, if you want to work with framerate
 	// Wait until at least 16ms passed since start of last frame (Effectively caps framerate at ~60fps)
@@ -531,6 +571,22 @@ void updateScene() {
 
 void init()
 {
+
+	glGenTextures(1, &texture);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	// Set texture wrapping to GL_REPEAT (usually basic wrapping method)
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	// Set texture filtering parameters
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	unsigned char* image = SOIL_load_image("../textures.png", &twidth, &theight, 0, SOIL_LOAD_RGBA);
+
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, twidth, theight, 0, GL_RGBA, GL_UNSIGNED_BYTE, image);
+	glGenerateMipmap(GL_TEXTURE_2D);
+	SOIL_free_image_data(image);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
 	for (int i = 0; i < 5; i++) {
 		enemies[i].setPos(0.0f, 0.0f, -3.0f);
 	}
