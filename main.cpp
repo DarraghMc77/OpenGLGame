@@ -29,7 +29,7 @@
 // put the mesh in your project directory, or provide a filepath for it here
 #define TEST_CUBE "../textcube.obj"
 #define STADIUM_NAME "../newstadium.obj"
-#define PLAYER_NAME "../football.obj"
+#define PLAYER_NAME "../luiginoarm.obj"
 #define BALL_NAME "../footballsmall.obj"
 #define ENEMY_NAME "../patrick.obj"
 #define PLAYER_ARM "../luigiarmonaxis.obj"
@@ -40,11 +40,11 @@
 
 
 //change if more meshes loaded
-int numberOfMeshes = 1;
+int numberOfMeshes = 5;
 
-int g_point_count[1];
-std::vector<float> g_vp[1], g_vn[1], g_vt[1];
-unsigned int vaos[1];
+int g_point_count[5];
+std::vector<float> g_vp[5], g_vn[5], g_vt[5];
+unsigned int vaos[5];
 
 
 int twidth, theight;
@@ -99,6 +99,9 @@ class Enemy {
 	float xposition;
 	float yposition;
 	float zposition;
+	float min;
+	float max;
+
 	public:
 		void setPos(float x, float y, float z) {
 			xposition = x;
@@ -130,9 +133,15 @@ class Enemy {
 			}
 		}
 
-		void boxCollision() {
-
+		bool hit(Ball ball) {
+			return(xposition + 0.5 > ball.getXPos() - 0.5 &&
+				xposition - 0.5 < ball.getXPos() + 0.5 &&
+				yposition + 1 > ball.getYPos() - 1 &&
+				yposition - 1 < ball.getYPos() + 1 &&
+				zposition + 0.5 > ball.getZPos() - 0.5 &&
+				zposition - 0.5 < ball.getZPos() + 0.5);
 		}
+
 };
 
 class Player {
@@ -156,6 +165,18 @@ public:
 
 	float getZPos() {
 		return zposition;
+	}
+
+	bool dead(Enemy bastard) {
+		//printf("checking max(%f,%f,%f) & min(%f,%f,%f) vs max(%f,%f,%f) & min(%f,%f,%f)\n\n", xposition + 1, yposition + 1, zposition + 1, xposition - 1, yposition - 1,
+		//	zposition - 1, bastard.getXPos() + 1, bastard.getYPos() + 1, bastard.getYPos() + 1, bastard.getZPos() + 1, bastard.getXPos() - 1, bastard.getYPos() - 1,
+		//	bastard.getZPos() - 1);
+		return(xposition+0.5 > bastard.getXPos()-0.5 &&
+			xposition-0.5 < bastard.getXPos() + 0.5 &&
+			yposition+1 > bastard.getYPos() - 1 &&
+			yposition-1 < bastard.getYPos() + 1 &&
+			zposition+0.5 > bastard.getZPos() - 0.5 &&
+			zposition-0.5 < bastard.getZPos() + 0.5);
 	}
 };
 
@@ -365,13 +386,13 @@ void generateObjectBufferMesh() {
 
 	//Note: you may get an error "vector subscript out of range" if you are using this code for a mesh that doesnt have positions and normals
 	//Might be an idea to do a check for that before generating and binding the buffer.
-	const char* names[1];
-	names[0] = TEST_CUBE;
-	//names[0] = STADIUM_NAME;
-	//names[1] = PLAYER_NAME;
-	//names[2] = BALL_NAME;
-	//names[3] = ENEMY_NAME;
-	//names[4] = PLAYER_ARM;
+	const char* names[5];
+	//names[0] = TEST_CUBE;
+	names[0] = STADIUM_NAME;
+	names[1] = PLAYER_NAME;
+	names[2] = BALL_NAME;
+	names[3] = ENEMY_NAME;
+	names[4] = PLAYER_ARM;
 	load_mesh(names);
 
 	for (int i = 0; i < numberOfMeshes; i++) {
@@ -391,10 +412,10 @@ void generateObjectBufferMesh() {
 		glBufferData(GL_ARRAY_BUFFER, g_point_count[i] * 3 * sizeof(float), &g_vn[i][0], GL_STATIC_DRAW);
 
 		//This is for texture coordinates which you don't currently need, so I have commented it out
-		unsigned int vt_vbo = 0;
-		glGenBuffers (1, &vt_vbo);
-		glBindBuffer (GL_ARRAY_BUFFER, vt_vbo);
-		glBufferData (GL_ARRAY_BUFFER, g_point_count[i] * 2 * sizeof (float), &g_vt[i][0], GL_STATIC_DRAW);
+		//unsigned int vt_vbo = 0;
+		//glGenBuffers (1, &vt_vbo);
+		//glBindBuffer (GL_ARRAY_BUFFER, vt_vbo);
+		//glBufferData (GL_ARRAY_BUFFER, g_point_count[i] * 2 * sizeof (float), &g_vt[i][0], GL_STATIC_DRAW);
 
 		glGenVertexArrays(1, &vaos[i]);
 		glBindVertexArray(vaos[i]);
@@ -405,9 +426,9 @@ void generateObjectBufferMesh() {
 		glEnableVertexAttribArray(loc2);
 		glBindBuffer(GL_ARRAY_BUFFER, vn_vbo);
 		glVertexAttribPointer(loc2, 3, GL_FLOAT, GL_FALSE, 0, NULL);
-		glEnableVertexAttribArray(loc3);
-		glBindBuffer (GL_ARRAY_BUFFER, vt_vbo);
-		glVertexAttribPointer (loc3, 2, GL_FLOAT, GL_FALSE, 0, NULL);
+		//glEnableVertexAttribArray(loc3);
+		//glBindBuffer (GL_ARRAY_BUFFER, vt_vbo);
+		//glVertexAttribPointer (loc3, 2, GL_FLOAT, GL_FALSE, 0, NULL);
 
 		glBindVertexArray(0);
 	}
@@ -444,7 +465,7 @@ void display(){
 
 
 	//test cube
-
+	/*
 	mat4 view = identity_mat4();
 	mat4 persp_proj = perspective(45.0, (float)width / (float)height, 0.1, 100.0);
 	mat4 model = identity_mat4();
@@ -461,9 +482,9 @@ void display(){
 
 	glBindVertexArray(vaos[0]);
 	glDrawArrays(GL_TRIANGLES, 0, g_point_count[0]);
-	
+	*/
 
-	/*
+	
 	// Root of the Hierarchy (stadium)
 	glm::mat4 view = glm::translate(glm::mat4(1.0), glm::vec3(0.0, 0.0, -40.0));
 	mat4 persp_proj = perspective(45.0, (float)width/(float)height, 0.1, 100.0);
@@ -479,7 +500,15 @@ void display(){
 	glBindVertexArray(vaos[0]);
 	glDrawArrays (GL_TRIANGLES, 0, g_point_count[0]);
 
-	
+
+	Player player;
+	player.setPos(xplayer, -0.09f, zplayer);
+
+
+	//printf("player position: (%f, %f, %f\n)", player.getXPos(), player.getYPos(), player.getZPos());
+	if (player.dead(enemies[0])) {
+		printf("DEAD\n\n\n\n\n");
+	}
 
 	// draw mesh 1 (player)
 	mat4 model2 = identity_mat4();
@@ -504,10 +533,11 @@ void display(){
 
 	// draw enemy keep array of enemies (can increase it depending on which level)
 	//printf("z position::::  %f", enemies[0].getZPos());
+	//printf("enemy position: (%f, %f, %f)\n", enemies[0].getXPos(), enemies[0].getYPos(), enemies[0].getZPos());
 
 	mat4 model4 = identity_mat4();
 	model4 = translate(model4, vec3(enemies[0].getXPos(), enemies[0].getYPos(), enemies[0].getZPos()));
-	mat4 globalmodel3 = globalmodel * model4;
+	mat4 globalmodel3 = model * model4;
 	glUniformMatrix4fv(matrix_location, 1, GL_FALSE, globalmodel3.m);
 
 	glBindVertexArray(vaos[3]);
@@ -536,7 +566,7 @@ void display(){
 		glDrawArrays(GL_TRIANGLES, 0, g_point_count[4]);
 	}
 	//make timer, end of timer release ball, during timer move arm up then back down using throwing boolean function
-	*/
+	
 
     glutSwapBuffers();
 }
@@ -562,7 +592,7 @@ void updateScene() {
 	zBall -= 0.1f;
 
 	//move enemy towards player
-	//enemies[0].moveToPlayer();
+	enemies[0].moveToPlayer();
 
 	// Draw the next frame
 	glutPostRedisplay();
@@ -621,6 +651,7 @@ void keypress(unsigned char key, int x, int y) {
 
 	//player
 	if (key == 'g') {
+		printf("zplayer: %f\n", zplayer);
 		zplayer += 0.1f;
 	}
 	if (key == 't') {
