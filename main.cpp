@@ -95,18 +95,42 @@ bool throwBall = false;
 
 bool throwing = false;
 
+class Ball {
+	float xposition;
+	float yposition;
+	float zposition;
+public:
+	void setPos(float x, float y, float z) {
+		xposition = x;
+		yposition = y;
+		zposition = z;
+	}
+
+	float getXPos() {
+		return xposition;
+	}
+
+	float getYPos() {
+		return yposition;
+	}
+
+	float getZPos() {
+		return zposition;
+	}
+};
+
 class Enemy {
 	float xposition;
 	float yposition;
 	float zposition;
-	float min;
-	float max;
+	bool dead;
 
 	public:
 		void setPos(float x, float y, float z) {
 			xposition = x;
 			yposition = y;
 			zposition = z;
+			dead = false;
 		}
 
 		float getXPos() {
@@ -140,6 +164,13 @@ class Enemy {
 				yposition - 1 < ball.getYPos() + 1 &&
 				zposition + 0.5 > ball.getZPos() - 0.5 &&
 				zposition - 0.5 < ball.getZPos() + 0.5);
+		}
+
+		bool isDead(bool hit) {
+			if (hit) {
+				dead = true;
+			}
+			return dead;
 		}
 
 };
@@ -180,33 +211,8 @@ public:
 	}
 };
 
-class Ball {
-	float xposition;
-	float yposition;
-	float zposition;
-public:
-	void setPos(float x, float y, float z) {
-		xposition = x;
-		yposition = y;
-		zposition = z;
-	}
-
-	float getXPos() {
-		return xposition;
-	}
-
-	float getYPos() {
-		return yposition;
-	}
-
-	float getZPos() {
-		return zposition;
-	}
-};
-
-
-
 Enemy enemies[5];
+Ball ball;
 
 #pragma region MESH LOADING
 /*----------------------------------------------------------------------------
@@ -534,14 +540,15 @@ void display(){
 	// draw enemy keep array of enemies (can increase it depending on which level)
 	//printf("z position::::  %f", enemies[0].getZPos());
 	//printf("enemy position: (%f, %f, %f)\n", enemies[0].getXPos(), enemies[0].getYPos(), enemies[0].getZPos());
+	if (!enemies[0].isDead(enemies[0].hit(ball))) {
+		mat4 model4 = identity_mat4();
+		model4 = translate(model4, vec3(enemies[0].getXPos(), enemies[0].getYPos(), enemies[0].getZPos()));
+		mat4 globalmodel3 = model * model4;
+		glUniformMatrix4fv(matrix_location, 1, GL_FALSE, globalmodel3.m);
 
-	mat4 model4 = identity_mat4();
-	model4 = translate(model4, vec3(enemies[0].getXPos(), enemies[0].getYPos(), enemies[0].getZPos()));
-	mat4 globalmodel3 = model * model4;
-	glUniformMatrix4fv(matrix_location, 1, GL_FALSE, globalmodel3.m);
-
-	glBindVertexArray(vaos[3]);
-	glDrawArrays(GL_TRIANGLES, 0, g_point_count[3]);
+		glBindVertexArray(vaos[3]);
+		glDrawArrays(GL_TRIANGLES, 0, g_point_count[3]);
+	}
 
 
 	//throwing animation
@@ -601,7 +608,7 @@ void updateScene() {
 
 void init()
 {
-
+	ball.setPos(50.0f, 50.0f, 50.0f);
 	glGenTextures(1, &texture);
 	glBindTexture(GL_TEXTURE_2D, texture);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	// Set texture wrapping to GL_REPEAT (usually basic wrapping method)
@@ -676,6 +683,7 @@ void keypress(unsigned char key, int x, int y) {
 	if (key == 'l') {
 		yBall = 0.0f;
 		zBall = 0.0f;
+		ball.setPos(0.0f, yBall, zBall);
 		throwBall = true;
 	}
 
