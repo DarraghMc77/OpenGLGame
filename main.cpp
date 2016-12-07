@@ -20,6 +20,7 @@
 #include <math.h>
 #include <vector> // STL dynamic memory.
 #include <SOIL.h>
+#include "text.h"
 
 
 /*----------------------------------------------------------------------------
@@ -88,6 +89,10 @@ GLfloat angleAroundPlayer = 30.0f;
 GLfloat xBall = 0.0f;
 GLfloat yBall = 0.0f;
 GLfloat zBall = 0.0f;
+
+//score
+int scoreText;
+int score;
 
 bool thirdPerson = true;
 
@@ -213,6 +218,13 @@ public:
 
 Enemy enemies[5];
 Ball ball;
+
+char* updateScore(int newScore) {
+	score += newScore;
+	char updatedScore[50];
+	sprintf(updatedScore, "Score: %d\n", score);
+	return updatedScore;
+}
 
 #pragma region MESH LOADING
 /*----------------------------------------------------------------------------
@@ -460,6 +472,7 @@ void display(){
 	int view_mat_location = glGetUniformLocation (shaderProgramID, "view");
 	int proj_mat_location = glGetUniformLocation (shaderProgramID, "proj");
 	
+
 	//third person on player
 	if(thirdPerson){
 		calculateCameraPosition();
@@ -468,7 +481,6 @@ void display(){
 	//if (throwBall) {
 	//	cameraPos = glm::vec3(xBall, yBall, (zBall+1));
 	//}
-
 
 	//test cube
 	/*
@@ -574,7 +586,7 @@ void display(){
 	}
 	//make timer, end of timer release ball, during timer move arm up then back down using throwing boolean function
 	
-
+	draw_texts();
     glutSwapBuffers();
 }
 
@@ -609,6 +621,16 @@ void updateScene() {
 void init()
 {
 	ball.setPos(50.0f, 50.0f, 50.0f);
+
+	init_text_rendering("../freemono.png", "../freemono.meta", width, height);
+	// x and y are -1 to 1
+	// size_px is the maximum glyph size in pixels (try 100.0f)
+	// r,g,b,a are red,blue,green,opacity values between 0.0 and 1.0
+	// if you want to change the text later you will use the returned integer as a parameter
+	
+
+	scoreText = add_text(updateScore(0), 0.45f, 0.9f, 35.0f, 1.0, 1.0, 1.0, 1.0);
+
 	glGenTextures(1, &texture);
 	glBindTexture(GL_TEXTURE_2D, texture);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	// Set texture wrapping to GL_REPEAT (usually basic wrapping method)
@@ -637,6 +659,10 @@ void init()
 	// load mesh into a vertex buffer array
 	generateObjectBufferMesh();
 	
+}
+
+void updateScore() {
+
 }
 
 // Placeholder code for the keypress
