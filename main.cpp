@@ -29,11 +29,12 @@
 // this mesh is a dae file format but you should be able to use any other format too, obj is typically what is used
 // put the mesh in your project directory, or provide a filepath for it here
 #define TEST_CUBE "../textcube.obj"
-#define STADIUM_NAME "../texturedstadium.obj"
+#define STADIUM_NAME "../stadium.obj"
 #define PLAYER_NAME "../luigitexturedwithhelmet.obj"
 #define BALL_NAME "../texturedfootball.obj"
 #define ENEMY_NAME "../texturedpatrick.obj"
 #define PLAYER_ARM "../luigiarmonaxis.obj"
+#define FIELD "../field.obj";
 /*----------------------------------------------------------------------------
   ----------------------------------------------------------------------------*/
 
@@ -41,15 +42,15 @@
 
 
 //change if more meshes loaded
-int numberOfMeshes = 4;
+int numberOfMeshes = 6;
 
-int g_point_count[4];
-std::vector<float> g_vp[4], g_vn[4], g_vt[4];
-unsigned int vaos[4];
+int g_point_count[6];
+std::vector<float> g_vp[6], g_vn[6], g_vt[6];
+unsigned int vaos[6];
 
 
 int twidth, theight;
-GLuint texture;
+GLuint textures[3];
 
 // Macro for indexing vertex buffer
 #define BUFFER_OFFSET(i) ((char *)NULL + (i))
@@ -79,7 +80,10 @@ GLfloat fov = 45.0f;
 //player movement
 GLfloat xplayer = 0.0f;
 GLfloat yplayer = 0.0f;
-GLfloat zplayer = 0.0f;
+GLfloat zplayer = 4.0f;
+GLfloat playerRotate = 0.0f;
+GLfloat playerSpeed;
+GLfloat armRotate = 0;
 
 //3rd person camera
 GLfloat distanceFromPlayer = 50.0f;
@@ -90,9 +94,23 @@ GLfloat xBall = 0.0f;
 GLfloat yBall = 0.0f;
 GLfloat zBall = 0.0f;
 
+//enemy movement
+int numberOfEnemies = 5;
+bool increasing = true;
+bool deleteEnemy = false;
+
 //score
 int scoreText;
 int score;
+int gameOverText;
+
+//time
+DWORD firstTime;
+int timeText;
+
+//screens
+bool inGame = true;
+bool gameOver = false;
 
 bool thirdPerson = true;
 
@@ -104,11 +122,13 @@ class Ball {
 	float xposition;
 	float yposition;
 	float zposition;
+	float ballRotation;
 public:
-	void setPos(float x, float y, float z) {
+	void setPos(float x, float y, float z, float playerRotation) {
 		xposition = x;
 		yposition = y;
 		zposition = z;
+		ballRotation = playerRotation;
 	}
 
 	float getXPos() {
@@ -122,6 +142,14 @@ public:
 	float getZPos() {
 		return zposition;
 	}
+
+	float getRotation() {
+		return ballRotation;
+	}
+
+	void movement() {
+		zposition -= 0.1f;
+	}
 };
 
 class Enemy {
@@ -129,6 +157,7 @@ class Enemy {
 	float yposition;
 	float zposition;
 	bool dead;
+	bool increasing;
 
 	public:
 		void setPos(float x, float y, float z) {
@@ -136,6 +165,11 @@ class Enemy {
 			yposition = y;
 			zposition = z;
 			dead = false;
+			increasing = true;
+		}
+
+		void setStatus() {
+			dead = true;
 		}
 
 		float getXPos() {
@@ -150,6 +184,18 @@ class Enemy {
 			return zposition;
 		}
 
+		void incrementX() {
+			xposition += 0.02f;
+		}
+
+		void decrementX() {
+			xposition -= 0.02f;
+		}
+
+		void incrementZ() {
+			zposition += 0.5f;
+		}
+
 		void moveToPlayer() {
 			if (xposition > 0) {
 				xposition -= 0.01;
@@ -162,19 +208,33 @@ class Enemy {
 			}
 		}
 
-		bool hit(Ball ball) {
-			return(xposition + 0.5 > ball.getXPos() - 0.5 &&
-				xposition - 0.5 < ball.getXPos() + 0.5 &&
-				yposition + 1 > ball.getYPos() - 1 &&
-				yposition - 1 < ball.getYPos() + 1 &&
-				zposition + 0.5 > ball.getZPos() - 0.5 &&
-				zposition - 0.5 < ball.getZPos() + 0.5);
+		void movement() {
+			if (increasing) {
+				incrementX();
+				if (xposition > 3.0f) {
+					incrementZ();
+					increasing = false;
+				}
+			}
+			else {
+				decrementX();
+				if (xposition < -3.0f) {
+					incrementZ();
+					increasing = true;
+				}
+			}
 		}
 
-		bool isDead(bool hit) {
-			if (hit) {
-				dead = true;
-			}
+		bool hit(float ballX, float ballY, float ballZ) {
+			return(xposition + 0.5 > ballX - 0.5 &&
+				xposition - 0.5 < ballX + 0.5 &&
+				yposition + 1 > ballY - 1 &&
+				yposition - 1 < ballY + 1 &&
+				zposition + 0.5 > ballZ - 0.5 &&
+				zposition - 0.5 < ballZ + 0.5);
+		}
+
+		bool isDead() {
 			return dead;
 		}
 
@@ -184,11 +244,13 @@ class Player {
 	float xposition;
 	float yposition;
 	float zposition;
+	float rotation;
 public:
 	void setPos(float x, float y, float z) {
 		xposition = x;
 		yposition = y;
 		zposition = z;
+		//rotatation = r;
 	}
 
 	float getXPos() {
@@ -201,6 +263,10 @@ public:
 
 	float getZPos() {
 		return zposition;
+	}
+
+	float getRotation() {
+		return rotation;
 	}
 
 	bool dead(Enemy bastard) {
@@ -218,12 +284,19 @@ public:
 
 Enemy enemies[5];
 Ball ball;
+std::vector<Ball> balls;
 
 char* updateScore(int newScore) {
 	score += newScore;
 	char updatedScore[50];
 	sprintf(updatedScore, "Score: %d\n", score);
 	return updatedScore;
+}
+
+char* updateTime(int minutes, int seconds) {
+	char updatedTime[50];
+	sprintf(updatedTime, "Time:  %d:%d\n", minutes, seconds);
+	return updatedTime;
 }
 
 #pragma region MESH LOADING
@@ -404,13 +477,14 @@ void generateObjectBufferMesh() {
 
 	//Note: you may get an error "vector subscript out of range" if you are using this code for a mesh that doesnt have positions and normals
 	//Might be an idea to do a check for that before generating and binding the buffer.
-	const char* names[4];
+	const char* names[6];
 	//names[0] = ENEMY_NAME;
 	names[0] = STADIUM_NAME;
 	names[1] = PLAYER_NAME;
 	names[2] = BALL_NAME;
 	names[3] = ENEMY_NAME;
-	//names[4] = PLAYER_ARM;
+	names[4] = FIELD;
+	names[5] = PLAYER_ARM;
 	load_mesh(names);
 
 	for (int i = 0; i < numberOfMeshes; i++) {
@@ -472,123 +546,152 @@ void display(){
 	int view_mat_location = glGetUniformLocation (shaderProgramID, "view");
 	int proj_mat_location = glGetUniformLocation (shaderProgramID, "proj");
 	
-
-	//third person on player
-	if(thirdPerson){
-		calculateCameraPosition();
-	}
-	//third person on thrown ball
-	//if (throwBall) {
-	//	cameraPos = glm::vec3(xBall, yBall, (zBall+1));
-	//}
-	/*
-	//test cube
-	mat4 view = identity_mat4();
-	mat4 persp_proj = perspective(45.0, (float)width / (float)height, 0.1, 100.0);
-	mat4 model = identity_mat4();
-	model = rotate_y_deg(model, rotate_y);
-	view = translate(view, vec3(0.0, 0.0, -5.0f));
-
-	// update uniforms & draw
-	glUniformMatrix4fv(proj_mat_location, 1, GL_FALSE, persp_proj.m);
-	glUniformMatrix4fv(view_mat_location, 1, GL_FALSE, view.m);
-	glUniformMatrix4fv(matrix_location, 1, GL_FALSE, model.m);
-
-	glBindTexture(GL_TEXTURE_2D, texture);
-	glUniform1i(glGetUniformLocation(shaderProgramID, "theTexture"), 0);
-
-	glBindVertexArray(vaos[0]);
-	glDrawArrays(GL_TRIANGLES, 0, g_point_count[0]);
-	*/
-	glBindTexture(GL_TEXTURE_2D, texture);
-	glUniform1i(glGetUniformLocation(shaderProgramID, "theTexture"), 0);
 	
-	
-	// Root of the Hierarchy (stadium)
-	glm::mat4 view = glm::translate(glm::mat4(1.0), glm::vec3(0.0, 0.0, -40.0));
-	mat4 persp_proj = perspective(45.0, (float)width/(float)height, 0.1, 100.0);
-	mat4 model = identity_mat4 ();
-	view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
-	//printf("(%f, %f, %f)", cameraPos, cameraPos + cameraFront, cameraUp);
+	if(inGame){
 
-	// update uniforms & draw
-	glUniformMatrix4fv (proj_mat_location, 1, GL_FALSE, persp_proj.m);
-	glUniformMatrix4fv (view_mat_location, 1, GL_FALSE, glm::value_ptr(view));
-	glUniformMatrix4fv (matrix_location, 1, GL_FALSE, model.m);
+		//third person on player
+		if (thirdPerson) {
+			calculateCameraPosition();
+		}
+		//third person on thrown ball
+		//if (throwBall) {
+		//	cameraPos = glm::vec3(xBall, yBall, (zBall+1));
+		//}
 
-	glBindVertexArray(vaos[0]);
-	glDrawArrays (GL_TRIANGLES, 0, g_point_count[0]);
+		glBindTexture(GL_TEXTURE_2D, textures[0]);
+		glUniform1i(glGetUniformLocation(shaderProgramID, "theTexture"), 0);
 
 
-	Player player;
-	player.setPos(xplayer, -0.09f, zplayer);
+		// Root of the Hierarchy (stadium)
+		glm::mat4 view = glm::translate(glm::mat4(1.0), glm::vec3(0.0, 0.0, -40.0));
+		mat4 persp_proj = perspective(45.0, (float)width / (float)height, 0.1, 100.0);
+		mat4 model = identity_mat4();
+		view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+		//printf("(%f, %f, %f)", cameraPos, cameraPos + cameraFront, cameraUp);
 
-	
-	//printf("player position: (%f, %f, %f\n)", player.getXPos(), player.getYPos(), player.getZPos());
-	if (player.dead(enemies[0])) {
-		printf("DEAD\n\n\n\n\n");
-	}
+		// update uniforms & draw
+		glUniformMatrix4fv(proj_mat_location, 1, GL_FALSE, persp_proj.m);
+		glUniformMatrix4fv(view_mat_location, 1, GL_FALSE, glm::value_ptr(view));
+		glUniformMatrix4fv(matrix_location, 1, GL_FALSE, model.m);
 
-	// draw mesh 1 (player)
-	mat4 model2 = identity_mat4();
-	model2 = translate(model2, vec3(xplayer, -0.09f, zplayer));
-	mat4 globalmodel = model * model2;
-	glUniformMatrix4fv(matrix_location, 1, GL_FALSE, globalmodel.m);
+		glBindVertexArray(vaos[0]);
+		glDrawArrays(GL_TRIANGLES, 0, g_point_count[0]);
 
-	glBindVertexArray(vaos[1]);
-	glDrawArrays(GL_TRIANGLES, 0, g_point_count[1]);
+		glBindTexture(GL_TEXTURE_2D, textures[2]);
+		glUniform1i(glGetUniformLocation(shaderProgramID, "theTexture"), 0);
 
-	// draw mesh 2 (ball)
-	if (throwBall) {
-		mat4 model3 = identity_mat4();
-		model3 = translate(model3, vec3(0.0f, yBall, zBall));
-		mat4 globalmodel2 = globalmodel * model3;
-		glUniformMatrix4fv(matrix_location, 1, GL_FALSE, globalmodel2.m);
-
-		glBindVertexArray(vaos[2]);
-		glDrawArrays(GL_TRIANGLES, 0, g_point_count[2]);
-		//throwBall = false;
-	}
-
-	// draw enemy keep array of enemies (can increase it depending on which level)
-	//printf("z position::::  %f", enemies[0].getZPos());
-	//printf("enemy position: (%f, %f, %f)\n", enemies[0].getXPos(), enemies[0].getYPos(), enemies[0].getZPos());
-	if (!enemies[0].isDead(enemies[0].hit(ball))) {
-		mat4 model4 = identity_mat4();
-		model4 = translate(model4, vec3(enemies[0].getXPos(), enemies[0].getYPos(), enemies[0].getZPos()));
-		mat4 globalmodel3 = model * model4;
-		glUniformMatrix4fv(matrix_location, 1, GL_FALSE, globalmodel3.m);
-
-		glBindVertexArray(vaos[3]);
-		glDrawArrays(GL_TRIANGLES, 0, g_point_count[3]);
-	}
-
-	/*
-	//throwing animation
-	if (throwing) {
-		mat4 model4 = identity_mat4();
-		model4 = rotate_x_deg(model4, 180.0f);
-		model4 = translate(model4, vec3(0.095f, 0.44f, 0.0f));
-		mat4 globalmodel3 = globalmodel * model4;
-		glUniformMatrix4fv(matrix_location, 1, GL_FALSE, globalmodel3.m);
 
 		glBindVertexArray(vaos[4]);
-		glDrawArrays(GL_TRIANGLES, 0, g_point_count[4]);
-	}
-	else {
-		mat4 model4 = identity_mat4();
-		//model4 = rotate_x_deg(model4, 180.0f);
-		model4 = translate(model4, vec3(0.095f, 0.44f, 0.0f));
-		mat4 globalmodel3 = globalmodel * model4;
-		glUniformMatrix4fv(matrix_location, 1, GL_FALSE, globalmodel3.m);
+		glDrawArrays(GL_TRIANGLES, 0, g_point_count[0]);
 
-		glBindVertexArray(vaos[4]);
-		glDrawArrays(GL_TRIANGLES, 0, g_point_count[4]);
+		glBindTexture(GL_TEXTURE_2D, textures[0]);
+		glUniform1i(glGetUniformLocation(shaderProgramID, "theTexture"), 0);
+
+
+
+		Player player;
+		player.setPos(xplayer, -0.09f, zplayer);
+
+
+		//printf("player position: (%f, %f, %f\n)", player.getXPos(), player.getYPos(), player.getZPos());
+		if (player.dead(enemies[0]) && !enemies[0].isDead()) {
+			printf("DEAD\n\n\n\n\n");
+			inGame = false;
+			gameOver = true;
+		}
+
+		if (player.getZPos() < -3.0f) {
+			printf("You win m8");
+		}
+
+		// draw mesh 1 (player)
+		mat4 model2 = identity_mat4();
+		model2 = scale(model2, vec3(0.6f, 0.6f, 0.6f));
+		model2 = rotate_y_deg(model2, playerRotate);
+		model2 = translate(model2, vec3(xplayer, -0.09f, zplayer));
+		mat4 globalmodel = model * model2;
+		glUniformMatrix4fv(matrix_location, 1, GL_FALSE, globalmodel.m);
+
+		glBindVertexArray(vaos[1]);
+		glDrawArrays(GL_TRIANGLES, 0, g_point_count[1]);
+
+
+
+		// draw mesh 2 (ball)
+		int current = 0;
+		for (std::vector<Ball>::iterator it = balls.begin(); it < balls.end(); ++it) {
+			//printf("\nball[%d]: (%f,%f,%f)", current, balls[current].getXPos(), balls[current].getYPos(), balls[current].getZPos());
+			mat4 model3 = identity_mat4();
+			model3 = scale(model3, vec3(0.5f, 0.5f, 0.5f));
+			model3 = rotate_y_deg(model3, balls[current].getRotation());
+			model3 = translate(model3, vec3(balls[current].getXPos(), balls[current].getYPos(), balls[current].getZPos()));
+			mat4 globalmodel2 = model * model3;
+			glUniformMatrix4fv(matrix_location, 1, GL_FALSE, globalmodel2.m);
+
+			glBindVertexArray(vaos[2]);
+			glDrawArrays(GL_TRIANGLES, 0, g_point_count[2]);
+			balls[current].movement();
+			current++;
+			for (int i = 0; i < numberOfEnemies; i++) {
+				if (enemies[i].hit(balls[current].getXPos(), balls[current].getYPos(), balls[current].getZPos())) {
+					balls[current] = balls.back(); balls.pop_back(); current--; //needs to be changed
+					printf("%d hit\n\n", current);
+					update_text(scoreText, updateScore(50));
+					enemies[i].setStatus();
+				}
+			}
+		}
+
+		// draw enemies
+		for (int i = 0; i < numberOfEnemies; i++) {
+			//printf("enemy position: (%f, %f, %f)\n", enemies[i].getXPos(), enemies[i].getYPos(), enemies[i].getZPos());
+			if (!enemies[i].isDead()) {
+				mat4 model4 = identity_mat4();
+				model4 = translate(model4, vec3(enemies[i].getXPos(), enemies[i].getYPos(), enemies[i].getZPos()));
+				mat4 globalmodel3 = model * model4;
+				glUniformMatrix4fv(matrix_location, 1, GL_FALSE, globalmodel3.m);
+				enemies[i].movement();
+
+				glBindVertexArray(vaos[3]);
+				glDrawArrays(GL_TRIANGLES, 0, g_point_count[3]);
+			}
+		}
+
+		
+		//throwing animation
+		if (throwing) {
+			mat4 model4 = identity_mat4();
+			model4 = rotate_x_deg(model4, 180.0f);
+			model4 = translate(model4, vec3(0.095f, 0.42f, 0.0f));
+			mat4 globalmodel3 = globalmodel * model4;
+			glUniformMatrix4fv(matrix_location, 1, GL_FALSE, globalmodel3.m);
+
+			glBindVertexArray(vaos[5]);
+			glDrawArrays(GL_TRIANGLES, 0, g_point_count[5]);
+		}
+		else {
+			mat4 model4 = identity_mat4();
+			model4 = rotate_x_deg(model4, 0.0f);
+			model4 = translate(model4, vec3(0.095f, 0.42f, 0.0f));
+			mat4 globalmodel3 = globalmodel * model4;
+			glUniformMatrix4fv(matrix_location, 1, GL_FALSE, globalmodel3.m);
+
+			glBindVertexArray(vaos[5]);
+			glDrawArrays(GL_TRIANGLES, 0, g_point_count[5]);
+		}
+		//make timer, end of timer release ball, during timer move arm up then back down using throwing boolean function
+
+		
+		/*if (enemies[0].hit(balls[current].getXPos(), balls[current].getYPos(), balls[current].getZPos())) {
+		update_text (scoreText, updateScore(50));
+		}*/
+		draw_texts();
 	}
-	//make timer, end of timer release ball, during timer move arm up then back down using throwing boolean function
-	
-	*/
-	draw_texts();
+	else if (gameOver) {
+		update_text(scoreText, "Game Over");
+		move_text(scoreText, -0.2f, 0.1f);
+		draw_texts();
+	}
 	
 	
     glutSwapBuffers();
@@ -601,7 +704,7 @@ void updateScene() {
 	// Placeholder code, if you want to work with framerate
 	// Wait until at least 16ms passed since start of last frame (Effectively caps framerate at ~60fps)
 	static DWORD  last_time = 0;
-	DWORD  curr_time = timeGetTime();
+	DWORD curr_time = timeGetTime();
 	float  delta = (curr_time - last_time) * 0.001f;
 	if (delta > 0.03f)
 		delta = 0.03f;
@@ -614,8 +717,12 @@ void updateScene() {
 	//yBall += 0.04f;
 	zBall -= 0.1f;
 
-	//move enemy towards player
-	enemies[0].moveToPlayer();
+	DWORD time = curr_time - firstTime;
+	int seconds = (int)((time / 1000) % 60);
+    int minutes = (int)((time / 1000) / 60);
+	if (inGame) {
+		update_text(timeText, updateTime(minutes, seconds));
+	}
 
 	// Draw the next frame
 	glutPostRedisplay();
@@ -624,33 +731,40 @@ void updateScene() {
 
 void init()
 {
-	ball.setPos(50.0f, 50.0f, 50.0f);
 
-	init_text_rendering("../freemono.png", "../freemono.meta", width, height);
-	// x and y are -1 to 1
-	// size_px is the maximum glyph size in pixels (try 100.0f)
-	// r,g,b,a are red,blue,green,opacity values between 0.0 and 1.0
-	// if you want to change the text later you will use the returned integer as a parameter
-	
-
+	//on screen text
+	firstTime = timeGetTime();
+	init_text_rendering("../freemono.png", "../freemono.meta", width, height);	
+	double t = timeGetTime();
 	scoreText = add_text(updateScore(0), 0.45f, 0.9f, 35.0f, 1.0, 1.0, 1.0, 1.0);
+	timeText = add_text(updateTime(0, 0), 0.45f, 0.99f, 35.0f, 1.0, 1.0, 1.0, 1.0);
 
-	glGenTextures(1, &texture);
-	glBindTexture(GL_TEXTURE_2D, texture);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	// Set texture wrapping to GL_REPEAT (usually basic wrapping method)
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	// Set texture filtering parameters
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	//load in textures
+	const char* textureNames[3];
+	textureNames[0] = "../luigiD.jpg";
+	textureNames[1] = "../textures.png";
+	textureNames[2] = "../GiantsField.jpg.";
 
-	unsigned char* image = SOIL_load_image("../luigiD.jpg", &twidth, &theight, 0, SOIL_LOAD_RGBA);
-	unsigned char* images[2];
-	images[0] = image;
+	for (int i = 0; i < 3; i++) {
 
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, twidth, theight, 0, GL_RGBA, GL_UNSIGNED_BYTE, images[0]);
-	glGenerateMipmap(GL_TEXTURE_2D);
-	SOIL_free_image_data(images[0]);
-	glBindTexture(GL_TEXTURE_2D, 0);
+		glGenTextures(1, &textures[i]);
+		glBindTexture(GL_TEXTURE_2D, textures[i]);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	// Set texture wrapping to GL_REPEAT (usually basic wrapping method)
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		// Set texture filtering parameters
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+		unsigned char* image = SOIL_load_image(textureNames[i], &twidth, &theight, 0, SOIL_LOAD_RGBA);
+
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, twidth, theight, 0, GL_RGBA, GL_UNSIGNED_BYTE, image);
+		glGenerateMipmap(GL_TEXTURE_2D);
+		SOIL_free_image_data(image);
+		glBindTexture(GL_TEXTURE_2D, 0);
+
+	}
+
+
 
 	for (int i = 0; i < 5; i++) {
 		enemies[i].setPos(0.0f, 0.0f, -3.0f);
@@ -659,16 +773,17 @@ void init()
 	float randomZ = rand() % 5;
 	float r2 = static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 5));
 	printf("randoms %f, %f", randomX, randomZ, r2);
-	enemies[0].setPos(randomX, 0.0f, -(randomZ));
+
+	float offset = 1.0f;
+	for (int i = 0; i < numberOfEnemies; i++) {
+		enemies[i].setPos(offset, 0.0f, -1.0f);
+		offset -= 0.5f;
+	}
 	// Set up the shaders
 	GLuint shaderProgramID = CompileShaders();
 	// load mesh into a vertex buffer array
 	generateObjectBufferMesh();
 	
-}
-
-void updateScore() {
-
 }
 
 // Placeholder code for the keypress
@@ -690,17 +805,20 @@ void keypress(unsigned char key, int x, int y) {
 
 	//player
 	if (key == 'g') {
-		printf("zplayer: %f\n", zplayer);
-		zplayer += 0.1f;
+		xplayer += 0.5f * sin((PI / 180)*playerRotate);
+		zplayer += 0.5f * cos((PI / 180)*playerRotate);
 	}
 	if (key == 't') {
-		zplayer -= 0.1f;
+		xplayer += -0.5f * sin((PI / 180)*playerRotate);
+		zplayer += -0.5f * cos((PI / 180)*playerRotate);
 	}
 	if (key == 'f') {
 		xplayer -= 0.1f;
+		//playerRotate += 4.0f;
 	}
 	if (key == 'h') {
 		xplayer += 0.1f;
+		//playerRotate -= 4.0f;
 	}
 
 	//camera selection
@@ -713,10 +831,8 @@ void keypress(unsigned char key, int x, int y) {
 
 	//create ball object
 	if (key == 'l') {
-		yBall = 0.0f;
-		zBall = 0.0f;
-		ball.setPos(0.0f, yBall, zBall);
-		throwBall = true;
+		inGame = false;
+		gameOver = true;
 	}
 
 	//move arm
@@ -762,6 +878,19 @@ void mouse(int xpos, int ypos) {
 	cameraFront = glm::normalize(front);
 }
 
+void mouseClick(int button, int state, int x, int y) {
+	if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN)
+	{
+		Ball b;
+		b.setPos(xplayer, yplayer, zplayer, playerRotate);
+		balls.push_back(b);
+		yBall = 0.0f;
+		zBall = 0.0f;
+		ball.setPos(0.0f, yBall, zBall, playerRotate);
+		throwBall = true;
+	}
+}
+
 int main(int argc, char** argv){
 	// Set up the window
 	glutInit(&argc, argv);
@@ -773,6 +902,7 @@ int main(int argc, char** argv){
 	glutDisplayFunc(display);
 	glutIdleFunc(updateScene);
 	glutKeyboardFunc(keypress);
+	glutMouseFunc(mouseClick);
 	glutPassiveMotionFunc(mouse);
 
 	 // A call to glewInit() must be done after glut is initialized!
