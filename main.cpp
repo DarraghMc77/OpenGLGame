@@ -32,9 +32,9 @@
 #define STADIUM_NAME "../stadium.obj"
 #define PLAYER_NAME "../luigitexturedwithhelmet.obj"
 #define BALL_NAME "../texturedfootball.obj"
-#define ENEMY_NAME "../texturedpatrick.obj"
+#define ENEMY_NAME "../mariowithhelmet.obj"
 #define PLAYER_ARM "../luigiarmonaxis.obj"
-#define FIELD "../field.obj";
+#define FIELD "../texturedfield.obj";
 /*----------------------------------------------------------------------------
   ----------------------------------------------------------------------------*/
 
@@ -50,7 +50,7 @@ unsigned int vaos[6];
 
 
 int twidth, theight;
-GLuint textures[3];
+GLuint textures[4];
 
 // Macro for indexing vertex buffer
 #define BUFFER_OFFSET(i) ((char *)NULL + (i))
@@ -111,6 +111,7 @@ int timeText;
 //screens
 bool inGame = true;
 bool gameOver = false;
+bool winner = false;
 
 bool thirdPerson = true;
 
@@ -211,14 +212,14 @@ class Enemy {
 		void movement() {
 			if (increasing) {
 				incrementX();
-				if (xposition > 3.0f) {
+				if (xposition > 2.6f) {
 					incrementZ();
 					increasing = false;
 				}
 			}
 			else {
 				decrementX();
-				if (xposition < -3.0f) {
+				if (xposition < -2.6f) {
 					incrementZ();
 					increasing = true;
 				}
@@ -471,14 +472,8 @@ GLuint CompileShaders()
 #pragma region VBO_FUNCTIONS
 
 void generateObjectBufferMesh() {
-	/*----------------------------------------------------------------------------
-	LOAD MESH HERE AND COPY INTO BUFFERS
-	----------------------------------------------------------------------------*/
 
-	//Note: you may get an error "vector subscript out of range" if you are using this code for a mesh that doesnt have positions and normals
-	//Might be an idea to do a check for that before generating and binding the buffer.
 	const char* names[6];
-	//names[0] = ENEMY_NAME;
 	names[0] = STADIUM_NAME;
 	names[1] = PLAYER_NAME;
 	names[2] = BALL_NAME;
@@ -549,6 +544,24 @@ void display(){
 	
 	if(inGame){
 
+		Player player;
+		player.setPos(xplayer, -0.09f, zplayer);
+
+		//if enemy touches player (game over)
+		if (player.dead(enemies[0]) && !enemies[0].isDead()) {
+			printf("DEAD\n\n\n\n\n");
+			inGame = false;
+			gameOver = true;
+		}
+
+		//if player in endzone (wins)
+		if (player.getZPos() < -5.0f) {
+			inGame = false;
+			gameOver = false;
+			winner = true;
+			printf("You win m8");
+		}
+
 		//third person on player
 		if (thirdPerson) {
 			calculateCameraPosition();
@@ -576,22 +589,12 @@ void display(){
 
 		glBindVertexArray(vaos[0]);
 		glDrawArrays(GL_TRIANGLES, 0, g_point_count[0]);
-
+		
+		//draw mesh 4 (field)
 		glBindTexture(GL_TEXTURE_2D, textures[2]);
 		glUniform1i(glGetUniformLocation(shaderProgramID, "theTexture"), 0);
-
-
 		glBindVertexArray(vaos[4]);
-		glDrawArrays(GL_TRIANGLES, 0, g_point_count[0]);
-
-		glBindTexture(GL_TEXTURE_2D, textures[0]);
-		glUniform1i(glGetUniformLocation(shaderProgramID, "theTexture"), 0);
-
-
-
-		Player player;
-		player.setPos(xplayer, -0.09f, zplayer);
-
+		glDrawArrays(GL_TRIANGLES, 0, g_point_count[4]);
 
 		//printf("player position: (%f, %f, %f\n)", player.getXPos(), player.getYPos(), player.getZPos());
 		if (player.dead(enemies[0]) && !enemies[0].isDead()) {
@@ -600,11 +603,17 @@ void display(){
 			gameOver = true;
 		}
 
-		if (player.getZPos() < -3.0f) {
+		if (player.getZPos() < -5.0f) {
+			inGame = false;
+			gameOver = false;
+			winner = true;
 			printf("You win m8");
 		}
 
 		// draw mesh 1 (player)
+		glBindTexture(GL_TEXTURE_2D, textures[0]);
+		glUniform1i(glGetUniformLocation(shaderProgramID, "theTexture"), 0);
+
 		mat4 model2 = identity_mat4();
 		model2 = scale(model2, vec3(0.6f, 0.6f, 0.6f));
 		model2 = rotate_y_deg(model2, playerRotate);
@@ -615,9 +624,7 @@ void display(){
 		glBindVertexArray(vaos[1]);
 		glDrawArrays(GL_TRIANGLES, 0, g_point_count[1]);
 
-
-
-		// draw mesh 2 (ball)
+		// draw mesh 2 (bals)
 		int current = 0;
 		for (std::vector<Ball>::iterator it = balls.begin(); it < balls.end(); ++it) {
 			//printf("\nball[%d]: (%f,%f,%f)", current, balls[current].getXPos(), balls[current].getYPos(), balls[current].getZPos());
@@ -642,7 +649,10 @@ void display(){
 			}
 		}
 
-		// draw enemies
+		//draw mesh 3 (Enemies)
+		glBindTexture(GL_TEXTURE_2D, textures[3]);
+		glUniform1i(glGetUniformLocation(shaderProgramID, "theTexture"), 0);
+
 		for (int i = 0; i < numberOfEnemies; i++) {
 			//printf("enemy position: (%f, %f, %f)\n", enemies[i].getXPos(), enemies[i].getYPos(), enemies[i].getZPos());
 			if (!enemies[i].isDead()) {
@@ -657,7 +667,7 @@ void display(){
 			}
 		}
 
-		
+		/*
 		//throwing animation
 		if (throwing) {
 			mat4 model4 = identity_mat4();
@@ -680,11 +690,8 @@ void display(){
 			glDrawArrays(GL_TRIANGLES, 0, g_point_count[5]);
 		}
 		//make timer, end of timer release ball, during timer move arm up then back down using throwing boolean function
+		*/
 
-		
-		/*if (enemies[0].hit(balls[current].getXPos(), balls[current].getYPos(), balls[current].getZPos())) {
-		update_text (scoreText, updateScore(50));
-		}*/
 		draw_texts();
 	}
 	else if (gameOver) {
@@ -692,7 +699,11 @@ void display(){
 		move_text(scoreText, -0.2f, 0.1f);
 		draw_texts();
 	}
-	
+	else if (winner) {
+		update_text(scoreText, "Touchdown!\nYou Win M8!");
+		move_text(scoreText, -0.2f, 0.1f);
+		draw_texts();
+	}
 	
     glutSwapBuffers();
 }
@@ -740,18 +751,17 @@ void init()
 	timeText = add_text(updateTime(0, 0), 0.45f, 0.99f, 35.0f, 1.0, 1.0, 1.0, 1.0);
 
 	//load in textures
-	const char* textureNames[3];
+	const char* textureNames[4];
 	textureNames[0] = "../luigiD.jpg";
 	textureNames[1] = "../textures.png";
 	textureNames[2] = "../GiantsField.jpg.";
+	textureNames[3] = "../marioD.jpg";
 
-	for (int i = 0; i < 3; i++) {
-
+	for (int i = 0; i < 4; i++) {
 		glGenTextures(1, &textures[i]);
 		glBindTexture(GL_TEXTURE_2D, textures[i]);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	// Set texture wrapping to GL_REPEAT (usually basic wrapping method)
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-		// Set texture filtering parameters
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
@@ -761,14 +771,13 @@ void init()
 		glGenerateMipmap(GL_TEXTURE_2D);
 		SOIL_free_image_data(image);
 		glBindTexture(GL_TEXTURE_2D, 0);
-
 	}
 
-
-
+	//create enemies
 	for (int i = 0; i < 5; i++) {
 		enemies[i].setPos(0.0f, 0.0f, -3.0f);
 	}
+
 	float randomX = rand() % 5;
 	float randomZ = rand() % 5;
 	float r2 = static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 5));
@@ -779,6 +788,7 @@ void init()
 		enemies[i].setPos(offset, 0.0f, -1.0f);
 		offset -= 0.5f;
 	}
+
 	// Set up the shaders
 	GLuint shaderProgramID = CompileShaders();
 	// load mesh into a vertex buffer array
@@ -786,7 +796,6 @@ void init()
 	
 }
 
-// Placeholder code for the keypress
 void keypress(unsigned char key, int x, int y) {
 	//camera
 	GLfloat cameraSpeed = 0.05f;
