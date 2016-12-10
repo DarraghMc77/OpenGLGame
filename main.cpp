@@ -29,7 +29,7 @@
 // this mesh is a dae file format but you should be able to use any other format too, obj is typically what is used
 // put the mesh in your project directory, or provide a filepath for it here
 #define TEST_CUBE "../textcube.obj"
-#define STADIUM_NAME "../stadium.obj"
+#define STADIUM_NAME "../texturedstadium.obj"
 #define PLAYER_NAME "../luigitexturedwithhelmet.obj"
 #define BALL_NAME "../texturedfootball.obj"
 #define ENEMY_NAME "../mariowithhelmet.obj"
@@ -541,7 +541,7 @@ void display(){
 	int view_mat_location = glGetUniformLocation (shaderProgramID, "view");
 	int proj_mat_location = glGetUniformLocation (shaderProgramID, "proj");
 	
-	
+	//game screen
 	if(inGame){
 
 		Player player;
@@ -694,12 +694,93 @@ void display(){
 
 		draw_texts();
 	}
+
+	//Game Over Screen
 	else if (gameOver) {
+
+		glBindTexture(GL_TEXTURE_2D, textures[0]);
+		glUniform1i(glGetUniformLocation(shaderProgramID, "theTexture"), 0);
+		// Root of the Hierarchy (stadium)
+		glm::mat4 view = glm::translate(glm::mat4(1.0), glm::vec3(0.0, 0.0, -40.0));
+		mat4 persp_proj = perspective(45.0, (float)width / (float)height, 0.1, 100.0);
+		mat4 model = identity_mat4();
+		view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+		//printf("(%f, %f, %f)", cameraPos, cameraPos + cameraFront, cameraUp);
+
+		// update uniforms & draw
+		glUniformMatrix4fv(proj_mat_location, 1, GL_FALSE, persp_proj.m);
+		glUniformMatrix4fv(view_mat_location, 1, GL_FALSE, glm::value_ptr(view));
+		glUniformMatrix4fv(matrix_location, 1, GL_FALSE, model.m);
+
+		glBindVertexArray(vaos[0]);
+		glDrawArrays(GL_TRIANGLES, 0, g_point_count[0]);
+
+		//draw mesh 4 (field)
+		glBindTexture(GL_TEXTURE_2D, textures[2]);
+		glUniform1i(glGetUniformLocation(shaderProgramID, "theTexture"), 0);
+		glBindVertexArray(vaos[4]);
+		glDrawArrays(GL_TRIANGLES, 0, g_point_count[4]);
+
+		//enemy
+		glBindTexture(GL_TEXTURE_2D, textures[3]);
+		glUniform1i(glGetUniformLocation(shaderProgramID, "theTexture"), 0);
+
+		mat4 model2 = identity_mat4();
+		model2 = scale(model2, vec3(0.6f, 0.6f, 0.6f));
+		model2 = rotate_y_deg(model2, 0.0f);
+		model2 = translate(model2, vec3(xplayer, -0.09f, zplayer));
+		mat4 globalmodel = model * model2;
+		glUniformMatrix4fv(matrix_location, 1, GL_FALSE, globalmodel.m);
+
+		glBindVertexArray(vaos[3]);
+		glDrawArrays(GL_TRIANGLES, 0, g_point_count[3]);
+
 		update_text(scoreText, "Game Over");
 		move_text(scoreText, -0.2f, 0.1f);
 		draw_texts();
 	}
+
+	//Win Screen
 	else if (winner) {
+
+		glBindTexture(GL_TEXTURE_2D, textures[0]);
+		glUniform1i(glGetUniformLocation(shaderProgramID, "theTexture"), 0);
+
+		// Root of the Hierarchy (stadium)
+		glm::mat4 view = glm::translate(glm::mat4(1.0), glm::vec3(0.0, 0.0, -40.0));
+		mat4 persp_proj = perspective(45.0, (float)width / (float)height, 0.1, 100.0);
+		mat4 model = identity_mat4();
+		view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+		//printf("(%f, %f, %f)", cameraPos, cameraPos + cameraFront, cameraUp);
+
+		// update uniforms & draw
+		glUniformMatrix4fv(proj_mat_location, 1, GL_FALSE, persp_proj.m);
+		glUniformMatrix4fv(view_mat_location, 1, GL_FALSE, glm::value_ptr(view));
+		glUniformMatrix4fv(matrix_location, 1, GL_FALSE, model.m);
+
+		glBindVertexArray(vaos[0]);
+		glDrawArrays(GL_TRIANGLES, 0, g_point_count[0]);
+
+		//draw mesh 4 (field)
+		glBindTexture(GL_TEXTURE_2D, textures[2]);
+		glUniform1i(glGetUniformLocation(shaderProgramID, "theTexture"), 0);
+		glBindVertexArray(vaos[4]);
+		glDrawArrays(GL_TRIANGLES, 0, g_point_count[4]);
+		
+		//player
+		glBindTexture(GL_TEXTURE_2D, textures[0]);
+		glUniform1i(glGetUniformLocation(shaderProgramID, "theTexture"), 0);
+
+		mat4 model2 = identity_mat4();
+		model2 = scale(model2, vec3(0.6f, 0.6f, 0.6f));
+		model2 = rotate_y_deg(model2, 180.0f);
+		model2 = translate(model2, vec3(xplayer, -0.09f, zplayer));
+		mat4 globalmodel = model * model2;
+		glUniformMatrix4fv(matrix_location, 1, GL_FALSE, globalmodel.m);
+
+		glBindVertexArray(vaos[1]);
+		glDrawArrays(GL_TRIANGLES, 0, g_point_count[1]);
+
 		update_text(scoreText, "Touchdown!\nYou Win M8!");
 		move_text(scoreText, -0.2f, 0.1f);
 		draw_texts();
